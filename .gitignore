@@ -1,38 +1,25 @@
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[cod]
-*$py.class
+*.so
 
-# Virtual environment
+# Environments
 venv/
 env/
 .venv/
-.env/
 
-# macOS system files
+# Jupyter & system
+.ipynb_checkpoints/
 .DS_Store
 
-# PyTorch / model files
-final_model/
+# Model files
+*.pt
+*.pth
+*.bin
+*.safetensors
 
-# Jupyter Notebook checkpoints
-.ipynb_checkpoints/
+# Streamlit
+.streamlit/
 
-# VS Code settings
+# VS Code
 .vscode/
-
-# Logs and database
-*.log
-*.sqlite3
-
-# Python packaging
-*.egg-info/
-dist/
-build/
-
-# Coverage reports
-.coverage
-htmlcov/
-
-# Pytest cache
-.pytest_cache/
