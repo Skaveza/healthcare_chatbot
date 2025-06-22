@@ -9,11 +9,13 @@ RUN pip install -r requirements.txt
 
 COPY . .
 
-# Set HOME env var to /app 
-ENV HOME=/app
+# Create .streamlit config directory in /app and set permissions
+RUN mkdir -p /app/.streamlit && chmod -R 755 /app/.streamlit
 
-# Optional: Also set Streamlit config directory explicitly
+# Set environment variables
+ENV HOME=/app
 ENV STREAMLIT_CONFIG_DIR=/app/.streamlit
+ENV XDG_CONFIG_HOME=/app/.streamlit  # Add this line
 
 # Expose Streamlit port
 EXPOSE 8501
