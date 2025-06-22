@@ -1,61 +1,97 @@
 import streamlit as st
-from transformers import T5ForConditionalGeneration, T5Tokenizer
+from transformers import (
+    BertForSequenceClassification,
+    BertTokenizer
+)
 import torch
+import numpy as np
 
-@st.cache_resource(show_spinner=False)
+@st.cache_resource
 def load_model():
-    model = T5ForConditionalGeneration.from_pretrained("./model/final_model")
-    tokenizer = T5Tokenizer.from_pretrained("t5-small")
-    model.eval()
-    return model, tokenizer
+    model_path = "./final_model"
+    tokenizer = BertTokenizer.from_pretrained(model_path)
+    model = BertForSequenceClassification.from_pretrained(model_path)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
+    return model, tokenizer, device
 
-def generate_answer(question, model, tokenizer):
-    input_text = "question: " + question
-    inputs = tokenizer.encode(input_text, return_tensors="pt", max_length=512, truncation=True)
+def classify_question(question, model, tokenizer, device):
+    inputs = tokenizer(
+        question,
+        max_length=128,
+        padding='max_length',
+        truncation=True,
+        return_tensors="pt"
+    ).to(device)
+    
     with torch.no_grad():
-        outputs = model.generate(inputs, max_length=150, num_beams=4, early_stopping=True)
-    answer = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    return answer
+        outputs = model(**inputs)
+    pred_class = torch.argmax(outputs.logits).item()
+    
+    class_names = {
+        0: "Definition (DEF)",
+        1: "Symptoms (SX)",
+        2: "Treatment (TX)",
+        3: "Diagnosis (DX)",
+        4: "General (CLS)"
+    }
+    return class_names.get(pred_class, "General (CLS)")
 
 def main():
-    st.title("Healthcare Chatbot")
-    st.write("Ask me any healthcare-related question!")
-
-    # Load model once
+    st.title("Healthcare Question Classifier")
+    st.write("Ask any medical question to get it classified")
+    
     try:
-        model, tokenizer = load_model()
-        st.success("Model loaded successfully!")
+        model, tokenizer, device = load_model()
     except Exception as e:
-        st.error(f"Error loading model: {e}")
+        st.error(f"Model loading failed: {str(e)}")
         return
-
-    # Initialize chat history
+    
+    # Chat interface
     if "messages" not in st.session_state:
         st.session_state.messages = []
-
-    # Display chat messages
+    
+    # Display history
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.write(message["content"])
-
+    
     # User input
-    if user_question := st.chat_input("Type your healthcare question here..."):
-        # Add user message to chat history
-        st.session_state.messages.append({"role": "user", "content": user_question})
+    if prompt := st.chat_input("Type your medical question..."):
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        
         with st.chat_message("user"):
-            st.write(user_question)
-
-        # Generate assistant response
+            st.write(prompt)
+        
         with st.chat_message("assistant"):
-            with st.spinner("Generating answer..."):
+            with st.spinner("Analyzing..."):
                 try:
-                    answer = generate_answer(user_question, model, tokenizer)
-                    st.write(answer)
-                    st.session_state.messages.append({"role": "assistant", "content": answer})
+                    # Classify question
+                    q_type = classify_question(prompt, model, tokenizer, device)
+                    response = f"Question Type: **{q_type}**\n\n"
+                    
+                    # Add explanation
+                    explanations = {
+                        "DEF": "This appears to be a definition question about medical terms or conditions.",
+                        "SX": "This question seems to be about symptoms of a medical condition.",
+                        "TX": "This looks like a treatment/therapy-related question.",
+                        "DX": "This is likely about diagnostic tests or procedures.",
+                        "CLS": "This is a general medical question."
+                    }
+                    response += explanations.get(q_type.split()[0], "")
+                    
+                    st.write(response)
+                    st.session_state.messages.append({
+                        "role": "assistant",
+                        "content": response
+                    })
                 except Exception as e:
-                    error_msg = f"Sorry, I encountered an error: {e}"
+                    error_msg = f"Error: {str(e)}"
                     st.write(error_msg)
-                    st.session_state.messages.append({"role": "assistant", "content": error_msg})
+                    st.session_state.messages.append({
+                        "role": "assistant",
+                        "content": error_msg
+                    })
 
 if __name__ == "__main__":
     main()
