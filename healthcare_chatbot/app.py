@@ -1,16 +1,27 @@
 import streamlit as st
-from transformers import (
-    BertForSequenceClassification,
-    BertTokenizer
-)
+from transformers import BertForSequenceClassification, BertTokenizer
 import torch
 import numpy as np
+import os
 
 @st.cache_resource
 def load_model():
-    model_path = "./final_model"
-    tokenizer = BertTokenizer.from_pretrained(model_path)
-    model = BertForSequenceClassification.from_pretrained(model_path)
+    model_path = "final_model"
+
+    # Check if the model directory exists
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(
+            f"Model directory '{model_path}' not found. "
+            "Please upload it manually if running locally, "
+            "or deploy using Hugging Face Hub or a cloud bucket if deploying."
+        )
+
+    try:
+        tokenizer = BertTokenizer.from_pretrained(model_path)
+        model = BertForSequenceClassification.from_pretrained(model_path)
+    except Exception as e:
+        raise RuntimeError(f"Failed to load model/tokenizer: {str(e)}")
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
     return model, tokenizer, device
@@ -26,6 +37,7 @@ def classify_question(question, model, tokenizer, device):
     
     with torch.no_grad():
         outputs = model(**inputs)
+    
     pred_class = torch.argmax(outputs.logits).item()
     
     class_names = {
@@ -35,63 +47,56 @@ def classify_question(question, model, tokenizer, device):
         3: "Diagnosis (DX)",
         4: "General (CLS)"
     }
+    
     return class_names.get(pred_class, "General (CLS)")
 
 def main():
-    st.title("Healthcare Question Classifier")
-    st.write("Ask any medical question to get it classified")
-    
+    st.set_page_config(page_title="Healthcare Classifier", page_icon="💊")
+    st.title("💬 Healthcare Question Classifier")
+    st.write("Ask a medical question and the model will classify its type.")
+
     try:
         model, tokenizer, device = load_model()
     except Exception as e:
-        st.error(f"Model loading failed: {str(e)}")
+        st.error(f"⚠️ Model loading failed: {str(e)}")
         return
-    
-    # Chat interface
+
+    # Maintain chat history
     if "messages" not in st.session_state:
         st.session_state.messages = []
-    
-    # Display history
+
+    # Display chat history
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
-            st.write(message["content"])
-    
-    # User input
-    if prompt := st.chat_input("Type your medical question..."):
+            st.markdown(message["content"])
+
+    # Chat input
+    if prompt := st.chat_input("Type your medical question here..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
-        
+
         with st.chat_message("user"):
-            st.write(prompt)
-        
+            st.markdown(prompt)
+
         with st.chat_message("assistant"):
-            with st.spinner("Analyzing..."):
+            with st.spinner("Classifying..."):
                 try:
-                    # Classify question
                     q_type = classify_question(prompt, model, tokenizer, device)
-                    response = f"Question Type: **{q_type}**\n\n"
-                    
-                    # Add explanation
+                    label = q_type.split()[0]  # Extract "DEF", "SX", etc.
                     explanations = {
-                        "DEF": "This appears to be a definition question about medical terms or conditions.",
-                        "SX": "This question seems to be about symptoms of a medical condition.",
-                        "TX": "This looks like a treatment/therapy-related question.",
-                        "DX": "This is likely about diagnostic tests or procedures.",
-                        "CLS": "This is a general medical question."
+                        "DEF": "📖 This appears to be a definition question about medical terms or conditions.",
+                        "SX": "🤒 This question seems to be about symptoms of a medical condition.",
+                        "TX": "💊 This looks like a treatment or therapy-related question.",
+                        "DX": "🧪 This is likely about diagnostic tests or procedures.",
+                        "CLS": "🩺 This is a general medical question."
                     }
-                    response += explanations.get(q_type.split()[0], "")
-                    
-                    st.write(response)
-                    st.session_state.messages.append({
-                        "role": "assistant",
-                        "content": response
-                    })
+                    response = f"**Question Type:** {q_type}\n\n{explanations.get(label, '')}"
+
+                    st.markdown(response)
+                    st.session_state.messages.append({"role": "assistant", "content": response})
                 except Exception as e:
-                    error_msg = f"Error: {str(e)}"
-                    st.write(error_msg)
-                    st.session_state.messages.append({
-                        "role": "assistant",
-                        "content": error_msg
-                    })
+                    error_msg = f"❌ Error: {str(e)}"
+                    st.markdown(error_msg)
+                    st.session_state.messages.append({"role": "assistant", "content": error_msg})
 
 if __name__ == "__main__":
     main()
