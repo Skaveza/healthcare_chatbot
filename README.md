@@ -46,7 +46,7 @@ You can run the chatbot interface locally using Streamlit.
 
 ```bash
 pip install -r requirements.txt
-streamlit run chatbot_app.py
+streamlit run app.py
 ```
 
 ---
