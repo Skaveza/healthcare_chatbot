@@ -5,12 +5,16 @@ import torch
 @st.cache_resource
 def load_model():
     model_repo = "sifakaveza/healthcare-chatbot"
+    tokenizer_repo = "microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract"
 
     try:
-        tokenizer = AutoTokenizer.from_pretrained(model_repo)
+        # Load model from your Hugging Face repo
         model = AutoModelForSequenceClassification.from_pretrained(model_repo)
+
+        # Load tokenizer from the base model
+        tokenizer = AutoTokenizer.from_pretrained(tokenizer_repo)
     except Exception as e:
-        raise RuntimeError(f"Failed to load model/tokenizer from Hugging Face Hub: {str(e)}")
+        raise RuntimeError(f"Failed to load model/tokenizer: {str(e)}")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
@@ -41,48 +45,14 @@ def classify_question(question, model, tokenizer, device):
     return class_names.get(pred_class, "General (CLS)")
 
 def main():
-    st.set_page_config(page_title="Healthcare Classifier")
     st.title("Healthcare Question Classifier")
-    st.write("Ask a medical question and the model will classify its type.")
 
-    try:
-        model, tokenizer, device = load_model()
-    except Exception as e:
-        st.error(f"Model loading failed: {str(e)}")
-        return
+    model, tokenizer, device = load_model()
 
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-
-    if prompt := st.chat_input("Type your medical question here..."):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-
-        with st.chat_message("user"):
-            st.markdown(prompt)
-
-        with st.chat_message("assistant"):
-            with st.spinner("Classifying..."):
-                try:
-                    q_type = classify_question(prompt, model, tokenizer, device)
-                    label = q_type.split()[0]
-                    explanations = {
-                        "DEF": "This appears to be a definition question about medical terms or conditions.",
-                        "SX": "This question seems to be about symptoms of a medical condition.",
-                        "TX": "This looks like a treatment or therapy-related question.",
-                        "DX": "This is likely about diagnostic tests or procedures.",
-                        "CLS": "This is a general medical question."
-                    }
-                    response = f"**Question Type:** {q_type}\n\n{explanations.get(label, '')}"
-                    st.markdown(response)
-                    st.session_state.messages.append({"role": "assistant", "content": response})
-                except Exception as e:
-                    error_msg = f"Error: {str(e)}"
-                    st.markdown(error_msg)
-                    st.session_state.messages.append({"role": "assistant", "content": error_msg})
+    question = st.text_input("Type your medical question here:")
+    if question:
+        label = classify_question(question, model, tokenizer, device)
+        st.write(f"**Predicted Question Type:** {label}")
 
 if __name__ == "__main__":
     main()
