@@ -23,3 +23,6 @@ env/
 
 # VS Code
 .vscode/
+
+# Pretrained model
+final_model/
