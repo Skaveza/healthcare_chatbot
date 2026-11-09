@@ -1,4 +1,5 @@
 import torch
+from scr.preprocessing import normalize_question
 from transformers import (
     BertForSequenceClassification,
     BertTokenizer,
@@ -73,7 +74,7 @@ class MedQuadEvaluator:
             test_df = self.load_test_data()
             
             # Prepare data - maintain same format as training
-            texts = (test_df['q_type'] + " " + test_df['question'].str.lower()).tolist()
+            texts = test_df['question'].map(normalize_question).tolist()
             y_true = test_df['q_type'].map(self.label_map).values
             
             # Predict
